@@ -9,4 +9,8 @@ resource "aws_instance" "instance" {
   user_data                   = var.user_data
   iam_instance_profile        = var.iam_instance_profile
   tags                        = var.tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }

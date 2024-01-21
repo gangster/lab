@@ -71,7 +71,6 @@ module "vpc" {
   cidr = "10.0.0.0/16"
 
   azs             = ["${var.region}a", "${var.region}b", "${var.region}c"]
-  private_subnets = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
   public_subnets  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
 
   enable_nat_gateway = false
@@ -91,9 +90,6 @@ module "sg_allow_ssh_and_egress" {
   description = "Allow SSH inbound traffic"
   vpc_id      = module.vpc.vpc_id
   ingress_rules = [
-    { from_port = 22, to_port = 22, protocol = "tcp", cidr_blocks = ["10.0.1.0/24"] },   # Private subnet 1
-    { from_port = 22, to_port = 22, protocol = "tcp", cidr_blocks = ["10.0.2.0/24"] },   # Private subnet 2
-    { from_port = 22, to_port = 22, protocol = "tcp", cidr_blocks = ["10.0.3.0/24"] },   # Private subnet 3
     { from_port = 22, to_port = 22, protocol = "tcp", cidr_blocks = ["10.0.101.0/24"] }, # Public subnet 1
     { from_port = 22, to_port = 22, protocol = "tcp", cidr_blocks = ["10.0.102.0/24"] }, # Public subnet 2
     { from_port = 22, to_port = 22, protocol = "tcp", cidr_blocks = ["10.0.103.0/24"] }  # Public subnet 3
@@ -110,12 +106,6 @@ module "sg_k8s" {
   description = "Security group for Kubernetes nodes"
   vpc_id      = module.vpc.vpc_id
   ingress_rules = [
-    { from_port = 6443, to_port = 6443, protocol = "tcp", cidr_blocks = module.vpc.private_subnets_cidr_blocks },   # Kubernetes API server
-    { from_port = 2379, to_port = 2380, protocol = "tcp", cidr_blocks = module.vpc.private_subnets_cidr_blocks },   # etcd server client API
-    { from_port = 10250, to_port = 10250, protocol = "tcp", cidr_blocks = module.vpc.private_subnets_cidr_blocks }, # Kubelet API
-    { from_port = 10255, to_port = 10255, protocol = "tcp", cidr_blocks = module.vpc.private_subnets_cidr_blocks }, # Kubelet read-only API (Optional)
-    { from_port = 30000, to_port = 32767, protocol = "tcp", cidr_blocks = module.vpc.private_subnets_cidr_blocks }, # NodePort Services
-
     { from_port = 6443, to_port = 6443, protocol = "tcp", cidr_blocks = module.vpc.public_subnets_cidr_blocks },   # Kubernetes API server
     { from_port = 2379, to_port = 2380, protocol = "tcp", cidr_blocks = module.vpc.public_subnets_cidr_blocks },   # etcd server client API
     { from_port = 10250, to_port = 10250, protocol = "tcp", cidr_blocks = module.vpc.public_subnets_cidr_blocks }, # Kubelet API
