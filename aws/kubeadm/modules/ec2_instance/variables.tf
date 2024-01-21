@@ -16,6 +16,8 @@ variable "ami_id" {
 variable "key_name" {
   description = "The name of the key pair to attach to the EC2 instance for SSH access."
   type        = string
+  nullable    = true
+  default     = null  
 }
 
 variable "vpc_security_group_ids" {

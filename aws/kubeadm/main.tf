@@ -1,5 +1,6 @@
 # Define the Terraform Cloud settings
 terraform {
+  required_version = "~> 1.7.0"
   cloud {
     organization = "josh-deeden" # Specify your Terraform Cloud organization
     workspaces {
@@ -10,7 +11,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "5.33.0" # Specify the AWS provider version
+      version = "~> 5.33.0" # Specify the AWS provider version
     }
   }
 }
@@ -35,6 +36,25 @@ provider "aws" {
 # Define local variables for common tags and project name
 locals {
   project_name = "k8s"
+  azs          = ["${var.region}a", "${var.region}b", "${var.region}c"]
+}
+
+locals {
+  ssh_ingress_rules = [
+    { from_port = 22, to_port = 22, protocol = "tcp", cidr_blocks = [var.public_subnets[0]] }, # Public subnet 1
+    { from_port = 22, to_port = 22, protocol = "tcp", cidr_blocks = [var.public_subnets[1]] }, # Public subnet 2
+    { from_port = 22, to_port = 22, protocol = "tcp", cidr_blocks = [var.public_subnets[2]] }  # Public subnet 3
+  ]
+  k8s_ingress_rules = [
+    { from_port = 6443, to_port = 6443, protocol = "tcp", cidr_blocks = module.vpc.public_subnets_cidr_blocks },   # Kubernetes API server
+    { from_port = 2379, to_port = 2380, protocol = "tcp", cidr_blocks = module.vpc.public_subnets_cidr_blocks },   # etcd server client API
+    { from_port = 10250, to_port = 10250, protocol = "tcp", cidr_blocks = module.vpc.public_subnets_cidr_blocks }, # Kubelet API
+    { from_port = 10255, to_port = 10255, protocol = "tcp", cidr_blocks = module.vpc.public_subnets_cidr_blocks }, # Kubelet read-only API (Optional)
+    { from_port = 30000, to_port = 32767, protocol = "tcp", cidr_blocks = module.vpc.public_subnets_cidr_blocks }, # NodePort Services    
+  ]
+  allow_all_egress_rules = [
+    { from_port = 0, to_port = 0, protocol = "-1", cidr_blocks = ["0.0.0.0/0"] } # Allow all outbound traffic
+  ]
 }
 
 # Define variables for AMI ID, instance type, and hostnames
@@ -46,6 +66,21 @@ variable "ami_id" {
 variable "instance_type" {
   description = "The type of the instance (e.g., t2.micro, m5.large). This determines the hardware specifications like CPU, memory, etc., of the launched instances."
   type        = string
+}
+
+variable "vpc_name" {
+  description = "The name of the VPC to be created."
+  type        = string
+}
+
+variable "cidr_block" {
+  description = "The CIDR block for the VPC."
+  type        = string
+}
+
+variable "public_subnets" {
+  description = "A list of public subnet CIDR blocks."
+  type        = list(string)
 }
 
 variable "controlplane_hostname" {
@@ -65,56 +100,33 @@ variable "worker2_hostname" {
 
 # Create the VPC using the terraform-aws-modules/vpc/aws module
 module "vpc" {
-  source = "terraform-aws-modules/vpc/aws"
-
-  name = "dev"
-  cidr = "10.0.0.0/16"
-
-  azs             = ["${var.region}a", "${var.region}b", "${var.region}c"]
-  public_subnets  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
-
+  source             = "terraform-aws-modules/vpc/aws"
+  name               = var.vpc_name
+  cidr               = var.cidr_block
+  azs                = local.azs
+  public_subnets     = var.public_subnets
   enable_nat_gateway = false
   enable_vpn_gateway = false
 }
 
-# Create an AWS key pair for SSH access
-resource "aws_key_pair" "node_key_pair" {
-  key_name   = "node_key_pair"
-  public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGFHZwZIhmzA8BMwbJDuTBcXu82bdJk3yPIfm3QF7DAw josh@deeden.org"
-}
-
 # Create a security group for SSH access and egress rules
 module "sg_allow_ssh_and_egress" {
-  source      = "./modules/security_group"
-  name        = "allow_ssh_and_egress"
-  description = "Allow SSH inbound traffic"
-  vpc_id      = module.vpc.vpc_id
-  ingress_rules = [
-    { from_port = 22, to_port = 22, protocol = "tcp", cidr_blocks = ["10.0.101.0/24"] }, # Public subnet 1
-    { from_port = 22, to_port = 22, protocol = "tcp", cidr_blocks = ["10.0.102.0/24"] }, # Public subnet 2
-    { from_port = 22, to_port = 22, protocol = "tcp", cidr_blocks = ["10.0.103.0/24"] }  # Public subnet 3
-  ]
-  egress_rules = [
-    { from_port = 0, to_port = 0, protocol = "-1", cidr_blocks = ["0.0.0.0/0"] }
-  ]
+  source        = "./modules/security_group"
+  name          = "allow_ssh_and_egress"
+  description   = "Allow SSH inbound traffic"
+  vpc_id        = module.vpc.vpc_id
+  ingress_rules = local.ssh_ingress_rules
+  egress_rules  = local.allow_all_egress_rules
 }
 
 # Create a security group for Kubernetes nodes
 module "sg_k8s" {
-  source      = "./modules/security_group"
-  name        = "k8s-security-group"
-  description = "Security group for Kubernetes nodes"
-  vpc_id      = module.vpc.vpc_id
-  ingress_rules = [
-    { from_port = 6443, to_port = 6443, protocol = "tcp", cidr_blocks = module.vpc.public_subnets_cidr_blocks },   # Kubernetes API server
-    { from_port = 2379, to_port = 2380, protocol = "tcp", cidr_blocks = module.vpc.public_subnets_cidr_blocks },   # etcd server client API
-    { from_port = 10250, to_port = 10250, protocol = "tcp", cidr_blocks = module.vpc.public_subnets_cidr_blocks }, # Kubelet API
-    { from_port = 10255, to_port = 10255, protocol = "tcp", cidr_blocks = module.vpc.public_subnets_cidr_blocks }, # Kubelet read-only API (Optional)
-    { from_port = 30000, to_port = 32767, protocol = "tcp", cidr_blocks = module.vpc.public_subnets_cidr_blocks }, # NodePort Services    
-  ]
-  egress_rules = [
-    { from_port = 0, to_port = 0, protocol = "-1", cidr_blocks = ["0.0.0.0/0"] }
-  ]
+  source        = "./modules/security_group"
+  name          = "k8s-security-group"
+  description   = "Security group for Kubernetes nodes"
+  vpc_id        = module.vpc.vpc_id
+  ingress_rules = local.k8s_ingress_rules
+  egress_rules  = local.allow_all_egress_rules
 }
 
 # Create cloud-init configurations for control plane and worker instances
@@ -187,7 +199,6 @@ module "controlplane_instance" {
   project_name                = local.project_name
   ami_id                      = var.ami_id
   instance_type               = var.instance_type
-  key_name                    = aws_key_pair.node_key_pair.key_name
   vpc_security_group_ids      = [module.sg_allow_ssh_and_egress.id, module.sg_k8s.id]
   subnet_id                   = module.vpc.public_subnets[0]
   associate_public_ip_address = true
@@ -202,7 +213,6 @@ module "worker1_instance" {
   project_name                = local.project_name
   ami_id                      = var.ami_id
   instance_type               = var.instance_type
-  key_name                    = aws_key_pair.node_key_pair.key_name
   vpc_security_group_ids      = [module.sg_allow_ssh_and_egress.id, module.sg_k8s.id]
   subnet_id                   = module.vpc.public_subnets[1]
   associate_public_ip_address = true
@@ -217,7 +227,6 @@ module "worker2_instance" {
   project_name                = local.project_name
   ami_id                      = var.ami_id
   instance_type               = var.instance_type
-  key_name                    = aws_key_pair.node_key_pair.key_name
   vpc_security_group_ids      = [module.sg_allow_ssh_and_egress.id, module.sg_k8s.id]
   subnet_id                   = module.vpc.public_subnets[2]
   associate_public_ip_address = true
