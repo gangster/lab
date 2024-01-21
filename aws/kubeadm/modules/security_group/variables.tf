@@ -1,3 +1,5 @@
+# modules/security_group/variables.tf
+
 variable "name" {
   description = "The name of the security group."
   type        = string
