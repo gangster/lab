@@ -1,0 +1,21 @@
+#cloud-config
+packages:
+  - vim
+  - zsh
+  - unzip
+  - bash-completion
+package_upgrade: true
+timezone: America/Los_Angeles
+users:
+  - name: josh
+    groups: [adm, sudo]
+    lock-passwd: false
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGFHZwZIhmzA8BMwbJDuTBcXu82bdJk3yPIfm3QF7DAw josh@deeden.org
+bootcmd:
+  - "HOSTNAME=${hostname} /root/hostname.sh"
+runcmd:
+  - sudo snap start amazon-ssm-agent
+  - /root/install-kubeadm.sh

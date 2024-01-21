@@ -1,0 +1,24 @@
+#cloud-config
+packages:
+  - vim
+  - zsh
+  - unzip
+  - bash-completion
+package_upgrade: true
+timezone: America/Los_Angeles
+users:
+  - name: lab
+    groups: [adm, sudo]
+    lock-passwd: false
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGFHZwZIhmzA8BMwbJDuTBcXu82bdJk3yPIfm3QF7DAw josh@deeden.org
+bootcmd:
+  - "HOSTNAME=${hostname} /root/hostname.sh"
+runcmd:
+  - sudo snap start amazon-ssm-agent
+  - /root/install-kubeadm.sh
+  - /root/init-kubeadm.sh
+  - export KUBECONFIG=/etc/kubernetes/admin.conf
+  - kubectl apply -f https://github.com/weaveworks/weave/releases/download/v2.8.1/weave-daemonset-k8s.yaml

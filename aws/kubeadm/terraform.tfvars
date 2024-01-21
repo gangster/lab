@@ -1,0 +1,6 @@
+instance_type         = "t2.micro"
+ami_id                = "ami-0cf43e6df06a5fd8a"
+region                = "us-west-2"
+controlplane_hostname = "controlplane"
+worker1_hostname      = "worker1"
+worker2_hostname      = "worker2"

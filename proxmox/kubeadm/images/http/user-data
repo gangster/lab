@@ -1,0 +1,45 @@
+#cloud-config
+autoinstall:
+  version: 1
+  locale: en_US
+  keyboard:
+    layout: us
+  ssh:
+    install-server: true
+    allow-pw: true
+    disable_root: true
+    ssh_quiet_keygen: true
+    allow_public_ssh_keys: true
+  packages:
+    - qemu-guest-agent
+    - sudo
+    - vim
+    - bash-completion
+    - zsh
+  storage:
+    layout:
+      name: direct
+    swap:
+      size: 0
+  user-data:
+    package_upgrade: false
+    timezone: America/Los_Angeles
+    users:
+      - name: lab
+        groups: [adm, sudo]
+        lock-passwd: false
+        sudo: ALL=(ALL) NOPASSWD:ALL
+        shell: /bin/bash
+        ssh_authorized_keys:
+          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII6XFwht2R5MBB9geihlf/z42V9PH0KtQ7m3KRr8r8qC josh@local
+    # runcmd:
+    #   - |
+    #     apt-get install -y kubelet kubeadm kubectl
+    #     apt-mark hold kubelet kubeadm kubectl
+    #     INTERNAL_IP=$(hostname -I | awk '{print $1}')
+    #     echo "KUBELET_EXTRA_ARGS='--node-ip ${INTERNAL_IP}'" > /etc/default/kubelet
+    #     EOF
+    #   - |
+    #     sudo crictl config \
+    #     --set runtime-endpoint=unix:///run/containerd/containerd.sock \
+    #     --set image-endpoint=unix:///run/containerd/containerd.sock

@@ -1,0 +1,5 @@
+vm_ip = "10.0.8.240"
+vm_gateway = "10.0.8.1"
+vm_netmask = "255.255.255.0"
+vm_dns = "1.1.1.1"
+vm_name = "controlplane"
